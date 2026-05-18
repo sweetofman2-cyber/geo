@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>애니워터 — AI 검색 미노출 문제점 & 해결방안</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --brand: #29ABE2;
+      --dark: #0d1b2a;
+      --white: #ffffff;
+      --dot-size: 10px;
+      --transition: 0.75s cubic-bezier(0.77, 0, 0.175, 1);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      font-family: 'Noto Sans KR', sans-serif;
+      background: var(--dark);
+      cursor: none;
+    }
+
+    /* ── Custom cursor ── */
+    #cursor {
+      position: fixed; z-index: 9999;
+      width: 18px; height: 18px;
+      border: 2px solid var(--white);
+      border-radius: 50%;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      transition: width .2s, height .2s, background .2s, opacity .3s;
+      mix-blend-mode: difference;
+    }
+    #cursor.big { width: 44px; height: 44px; background: rgba(255,255,255,.12); }
+
+    /* ── Wrapper: horizontal scroll container ── */
+    #slider {
+      display: flex;
+      width: 100vw; height: 100vh;
+      transition: transform var(--transition);
+      will-change: transform;
+    }
+
+    /* ── Each slide ── */
+    .slide {
+      flex: 0 0 100vw;
+      width: 100vw; height: 100vh;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--brand);
+    }
+
+    /* Full-bleed image */
+    .slide img {
+      width: 100%; height: 100%;
+      object-fit: contain;
+      object-position: center;
+      display: block;
+      user-select: none;
+      -webkit-user-drag: none;
+      transition: transform 1.1s cubic-bezier(0.22, 1, 0.36, 1), opacity .6s ease;
+      opacity: 0;
+      transform: scale(1.04);
+    }
+    .slide.active img {
+      opacity: 1;
+      transform: scale(1);
+    }
+    .slide.prev img {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+
+    /* Slide number label */
+    .slide-label {
+      position: absolute;
+      bottom: 28px; left: 36px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .18em;
+      color: rgba(255,255,255,.45);
+      text-transform: uppercase;
+    }
+
+    /* ── Dot navigation ── */
+    #dots {
+      position: fixed;
+      right: 28px; top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 100;
+    }
+    .dot {
+      width: var(--dot-size); height: var(--dot-size);
+      border-radius: 50%;
+      background: rgba(255,255,255,.35);
+      cursor: pointer;
+      transition: background .3s, transform .3s;
+      border: none; outline: none;
+    }
+    .dot.active {
+      background: var(--white);
+      transform: scale(1.45);
+    }
+    .dot:hover { background: rgba(255,255,255,.75); }
+
+    /* ── Arrow buttons ── */
+    .arrow {
+      position: fixed;
+      top: 50%; z-index: 100;
+      width: 48px; height: 48px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,.12);
+      border: 1.5px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: background .25s, transform .25s;
+      transform: translateY(-50%);
+      color: var(--white);
+    }
+    .arrow:hover { background: rgba(255,255,255,.28); transform: translateY(-50%) scale(1.1); }
+    .arrow:active { transform: translateY(-50%) scale(0.95); }
+    #arrow-prev { left: 20px; }
+    #arrow-next { right: 56px; }
+    .arrow svg { width: 20px; height: 20px; }
+
+    /* ── Progress bar ── */
+    #progress {
+      position: fixed;
+      bottom: 0; left: 0;
+      height: 3px;
+      background: rgba(255,255,255,.9);
+      transition: width var(--transition);
+      z-index: 200;
+    }
+
+    /* ── Slide counter ── */
+    #counter {
+      position: fixed;
+      bottom: 24px; right: 56px;
+      font-size: 12px; font-weight: 700;
+      color: rgba(255,255,255,.5);
+      letter-spacing: .12em;
+      z-index: 100;
+    }
+    #counter span { color: var(--white); font-size: 18px; }
+
+    /* ── Intro logo / title overlay (slide 0) ── */
+    .logo-overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: flex-end;
+      padding-bottom: 48px;
+      pointer-events: none;
+    }
+    .logo-overlay .brand-tag {
+      font-size: 13px; font-weight: 700; letter-spacing: .22em;
+      color: rgba(255,255,255,.55); text-transform: uppercase;
+    }
+
+    /* ── Swipe hint ── */
+    #hint {
+      position: fixed;
+      bottom: 60px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      font-size: 11px; color: rgba(255,255,255,.4);
+      letter-spacing: .14em; text-transform: uppercase;
+      animation: fadeHint 2.5s ease 1.5s forwards;
+      opacity: 0;
+      z-index: 100;
+    }
+    #hint svg { animation: bounce 1.4s ease-in-out infinite; }
+    @keyframes bounce {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(8px); }
+    }
+    @keyframes fadeHint {
+      0%   { opacity: 0; }
+      20%  { opacity: 1; }
+      70%  { opacity: 1; }
+      100% { opacity: 0; pointer-events: none; }
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 768px) {
+      #arrow-prev, #arrow-next { display: none; }
+      #dots { right: 14px; }
+      #counter { right: 30px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Custom cursor -->
+<div id="cursor"></div>
+
+<!-- Progress bar -->
+<div id="progress"></div>
+
+<!-- Slide counter -->
+<div id="counter"><span id="cur">1</span> / <span id="tot">6</span></div>
+
+<!-- Swipe hint -->
+<div id="hint">
+  <svg width="28" height="16" viewBox="0 0 28 16" fill="none">
+    <path d="M2 8h24M18 2l6 6-6 6" stroke="rgba(255,255,255,.5)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  좌우 스크롤
+</div>
+
+<!-- Arrow prev -->
+<button class="arrow" id="arrow-prev" aria-label="이전">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>
+</button>
+
+<!-- Arrow next -->
+<button class="arrow" id="arrow-next" aria-label="다음">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="9 18 15 12 9 6"/>
+  </svg>
+</button>
+
+<!-- Dot nav -->
+<nav id="dots" aria-label="슬라이드 네비게이션"></nav>
+
+<!-- Slider -->
+<div id="slider">
+
+  <!-- Slide 6: 문제점 5 -->
+  <section class="slide active" data-index="0">
+    <img src="images/1.jpg" alt="문제점  — 공신력 있는 사이트 안의 콘텐츠 부족" draggable="false" />
+    <div class="slide-label">문제점 05</div>
+  </section>
+  <!-- Slide 1: 타이틀 -->
+  <section class="slide" data-index="1">
+    <img src="images/2.jpg" alt="AI 검색 미노출 문제점, 해결방안" draggable="false" />
+    <div class="slide-label">Intro</div>
+  </section>
+
+  <!-- Slide 2: 문제점 1 -->
+  <section class="slide" data-index="2">
+    <img src="images/3.jpg" alt="문제점 1 — 포털 사이트 검색량 부족" draggable="false" />
+    <div class="slide-label">문제점 01</div>
+  </section>
+
+  <!-- Slide 3: 문제점 2 -->
+  <section class="slide" data-index="3">
+    <img src="images/4.jpg" alt="문제점 2 — PC&Mobile 홈페이지 이미지 설명 빈도 높음" draggable="false" />
+    <div class="slide-label">문제점 02</div>
+  </section>
+
+  <!-- Slide 4: 문제점 3 -->
+  <section class="slide" data-index="4">
+    <img src="images/5.jpg" alt="문제점 3 — SNS 이미지·영상 홍보 비중 높음" draggable="false" />
+    <div class="slide-label">문제점 03</div>
+  </section>
+
+  <!-- Slide 5: 문제점 4 -->
+  <section class="slide" data-index="5">
+    <img src="images/6.jpg" alt="문제점 4 — 콘텐츠 광고성 멘트와 추상적 내용" draggable="false" />
+    <div class="slide-label">문제점 04</div>
+  </section>
+
+
+</div>
+
+<script>
+  const TOTAL = 6;
+  let current = 0;
+  let isAnimating = false;
+
+  const slider   = document.getElementById('slider');
+  const dotsNav  = document.getElementById('dots');
+  const progress = document.getElementById('progress');
+  const curEl    = document.getElementById('cur');
+  const btnPrev  = document.getElementById('arrow-prev');
+  const btnNext  = document.getElementById('arrow-next');
+  const cursor   = document.getElementById('cursor');
+  const slides   = document.querySelectorAll('.slide');
+
+  // ── Build dots ──────────────────────────────────────────────
+  slides.forEach((_, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'dot' + (i === 0 ? ' active' : '');
+    btn.setAttribute('aria-label', `슬라이드 ${i + 1}`);
+    btn.addEventListener('click', () => goTo(i));
+    dotsNav.appendChild(btn);
+  });
+
+  function getDots() { return dotsNav.querySelectorAll('.dot'); }
+
+  // ── Navigate ─────────────────────────────────────────────────
+  function goTo(index) {
+    if (isAnimating || index === current || index < 0 || index >= TOTAL) return;
+    isAnimating = true;
+
+    const prev = current;
+    current = index;
+
+    // Slide classes
+    slides[prev].classList.remove('active');
+    slides[prev].classList.add('prev');
+    slides[current].classList.add('active');
+
+    // Translate
+    slider.style.transform = `translateX(-${current * 100}vw)`;
+
+    // Dots
+    const dots = getDots();
+    dots.forEach((d, i) => d.classList.toggle('active', i === current));
+
+    // Progress
+    progress.style.width = ((current + 1) / TOTAL * 100) + '%';
+
+    // Counter
+    curEl.textContent = current + 1;
+
+    // Arrow states
+    btnPrev.style.opacity = current === 0 ? '0.3' : '1';
+    btnNext.style.opacity = current === TOTAL - 1 ? '0.3' : '1';
+
+    setTimeout(() => {
+      slides[prev].classList.remove('prev');
+      isAnimating = false;
+    }, 800);
+  }
+
+  function next() { goTo(current + 1); }
+  function prev() { goTo(current - 1); }
+
+  // ── Arrow buttons ─────────────────────────────────────────────
+  btnNext.addEventListener('click', next);
+  btnPrev.addEventListener('click', prev);
+
+  // ── Keyboard ──────────────────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next();
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   prev();
+  });
+
+  // ── Wheel ─────────────────────────────────────────────────────
+  let wheelCooldown = false;
+  document.addEventListener('wheel', e => {
+    e.preventDefault();
+    if (wheelCooldown) return;
+    wheelCooldown = true;
+    if (e.deltaY > 0 || e.deltaX > 0) next(); else prev();
+    setTimeout(() => { wheelCooldown = false; }, 900);
+  }, { passive: false });
+
+  // ── Touch / Swipe ─────────────────────────────────────────────
+  let touchStartX = 0, touchStartY = 0;
+  document.addEventListener('touchstart', e => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    const dx = touchStartX - e.changedTouches[0].clientX;
+    const dy = touchStartY - e.changedTouches[0].clientY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+      dx > 0 ? next() : prev();
+    }
+  }, { passive: true });
+
+  // ── Custom cursor ─────────────────────────────────────────────
+  document.addEventListener('mousemove', e => {
+    cursor.style.left = e.clientX + 'px';
+    cursor.style.top  = e.clientY + 'px';
+  });
+  document.querySelectorAll('button, .dot, a').forEach(el => {
+    el.addEventListener('mouseenter', () => cursor.classList.add('big'));
+    el.addEventListener('mouseleave', () => cursor.classList.remove('big'));
+  });
+
+  // ── Init ──────────────────────────────────────────────────────
+  progress.style.width = (1 / TOTAL * 100) + '%';
+  btnPrev.style.opacity = '0.3';
+</script>
+</body>
+</html>
