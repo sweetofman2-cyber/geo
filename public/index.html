@@ -202,16 +202,12 @@
 </head>
 <body>
 
-<!-- Custom cursor -->
 <div id="cursor"></div>
 
-<!-- Progress bar -->
 <div id="progress"></div>
 
-<!-- Slide counter -->
 <div id="counter"><span id="cur">1</span> / <span id="tot">7</span></div>
 
-<!-- Swipe hint -->
 <div id="hint">
   <svg width="28" height="16" viewBox="0 0 28 16" fill="none">
     <path d="M2 8h24M18 2l6 6-6 6" stroke="rgba(255,255,255,.5)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
@@ -219,24 +215,20 @@
   좌우 스크롤
 </div>
 
-<!-- Arrow prev -->
 <button class="arrow" id="arrow-prev" aria-label="이전">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <polyline points="15 18 9 12 15 6"/>
   </svg>
 </button>
 
-<!-- Arrow next -->
 <button class="arrow" id="arrow-next" aria-label="다음">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <polyline points="9 18 15 12 9 6"/>
   </svg>
 </button>
 
-<!-- Dot nav -->
 <nav id="dots" aria-label="슬라이드 네비게이션"></nav>
 
-<!-- Slider -->
 <div id="slider">
 
   <section class="slide active" data-index="0">
@@ -277,18 +269,21 @@
 </div>
 
 <script>
-  const TOTAL = 6;
   let current = 0;
   let isAnimating = false;
 
-  const slider   = document.getElementById('slider');
+  const slider    = document.getElementById('slider');
   const dotsNav  = document.getElementById('dots');
   const progress = document.getElementById('progress');
   const curEl    = document.getElementById('cur');
+  const totEl    = document.getElementById('tot');
   const btnPrev  = document.getElementById('arrow-prev');
   const btnNext  = document.getElementById('arrow-next');
   const cursor   = document.getElementById('cursor');
   const slides   = document.querySelectorAll('.slide');
+  
+  // 슬라이드 총 개수를 HTML 구조에서 자동으로 가져옵니다.
+  const TOTAL = slides.length; 
 
   // ── Build dots ──────────────────────────────────────────────
   slides.forEach((_, i) => {
@@ -385,6 +380,7 @@
   });
 
   // ── Init ──────────────────────────────────────────────────────
+  totEl.textContent = TOTAL; // 카운터 총 개수 텍스트 동적 반영
   progress.style.width = (1 / TOTAL * 100) + '%';
   btnPrev.style.opacity = '0.3';
 </script>
